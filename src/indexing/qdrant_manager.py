@@ -146,6 +146,7 @@ class QdrantManager:
             client=self.client,
             collection_name=self.collection_name,
             embedding=self.embeddings,
+            content_payload_key="text"
         )
         
         return vectorstore.as_retriever(

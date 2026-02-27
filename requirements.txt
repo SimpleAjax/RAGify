@@ -8,3 +8,6 @@ qdrant-client
 sentence-transformers
 langgraph
 neo4j
+ragas
+litellm
+mlflow

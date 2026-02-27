@@ -89,7 +89,11 @@ class DecompositionRAG(AbstractRAGStrategy):
             sub_query = state.sub_query
             
             try:
-                docs = self.retriever(sub_query)
+                # If it's a LangChain retriever, use .invoke(), otherwise if callable fallback
+                if hasattr(self.retriever, "invoke"):
+                    docs = self.retriever.invoke(sub_query)
+                else:
+                    docs = self.retriever(sub_query)
                 texts = [d.page_content for d in docs]
             except Exception:
                 texts = []
