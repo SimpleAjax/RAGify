@@ -1,0 +1,5 @@
+datasets
+pydantic
+pytest
+langchain-core
+tqdm
