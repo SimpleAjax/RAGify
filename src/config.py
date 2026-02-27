@@ -117,6 +117,21 @@ class Config:
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "50"))
     
     # ==========================================================================
+    # Dataset Indexing Configuration
+    # ==========================================================================
+    # Sample sizes: use -1 for ALL samples, 0 to skip dataset, or positive number for subset
+    HOTPOTQA_SAMPLE_SIZE: int = int(os.getenv("HOTPOTQA_SAMPLE_SIZE", "100"))
+    TWOWIKI_SAMPLE_SIZE: int = int(os.getenv("TWOWIKI_SAMPLE_SIZE", "100"))
+    MUSIQUE_SAMPLE_SIZE: int = int(os.getenv("MUSIQUE_SAMPLE_SIZE", "100"))
+    MULTIHOP_RAG_SAMPLE_SIZE: int = int(os.getenv("MULTIHOP_RAG_SAMPLE_SIZE", "100"))
+    
+    # Dataset splits
+    HOTPOTQA_SPLIT: str = os.getenv("HOTPOTQA_SPLIT", "validation")
+    TWOWIKI_SPLIT: str = os.getenv("TWOWIKI_SPLIT", "train")
+    MUSIQUE_SPLIT: str = os.getenv("MUSIQUE_SPLIT", "validation")
+    MULTIHOP_RAG_SPLIT: str = os.getenv("MULTIHOP_RAG_SPLIT", "train")
+    
+    # ==========================================================================
     # Helper Methods
     # ==========================================================================
     
@@ -196,7 +211,24 @@ class Config:
         print(f"  QDRANT: {cls.QDRANT_HOST}:{cls.QDRANT_PORT}")
         print(f"  NEO4J: {cls.NEO4J_URI}")
         
+        # Dataset Indexing
+        print(f"\nDataset Indexing Configuration:")
+        print(f"  HotpotQA: {cls._sample_size_str(cls.HOTPOTQA_SAMPLE_SIZE)} (split: {cls.HOTPOTQA_SPLIT})")
+        print(f"  2WikiMultiHopQA: {cls._sample_size_str(cls.TWOWIKI_SAMPLE_SIZE)} (split: {cls.TWOWIKI_SPLIT})")
+        print(f"  MuSiQue: {cls._sample_size_str(cls.MUSIQUE_SAMPLE_SIZE)} (split: {cls.MUSIQUE_SPLIT})")
+        print(f"  MultiHop-RAG: {cls._sample_size_str(cls.MULTIHOP_RAG_SAMPLE_SIZE)} (split: {cls.MULTIHOP_RAG_SPLIT})")
+        
         print("\n" + "=" * 60)
+    
+    @staticmethod
+    def _sample_size_str(size: int) -> str:
+        """Convert sample size to readable string."""
+        if size == -1:
+            return "ALL samples"
+        elif size == 0:
+            return "SKIPPED"
+        else:
+            return f"{size} samples"
 
 
 # Create a singleton instance for easy import

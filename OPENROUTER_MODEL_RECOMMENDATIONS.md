@@ -399,12 +399,22 @@ set_llm_cache(SQLiteCache(database_path=".langchain.db"))
 copy .env.example .env
 # Edit .env and add your OPENROUTER_API_KEY
 
-# 2. Run evaluation (uses models from .env automatically)
-python scripts/evaluate_strategy.py --output results.csv
+# 2. Index data first
+python scripts/index_data.py
 
-# 3. Show current configuration
+# 3. Run full RAG evaluation
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100
+
+# 4. Show current configuration
 python scripts/evaluate_strategy.py --show-config
 ```
+
+### Important: Two Different Scripts
+
+| Script | Purpose | Use When |
+|--------|---------|----------|
+| `run_rag_evaluation.py` | **Full RAG pipeline** - runs strategy, generates answers, evaluates | Testing RAG strategies end-to-end |
+| `evaluate_strategy.py` | **RAGAS only** - evaluates pre-generated answers | You already have answers in JSON format |
 
 ### Switching Models
 

@@ -225,7 +225,10 @@ This displays sample records from all 4 datasets (HotpotQA, 2WikiMultiHopQA, MuS
 Index datasets into vector and graph databases:
 
 ```bash
-# Index both vector and graph data
+# Show current dataset configuration
+python scripts/index_data.py --show-config
+
+# Index both vector and graph data (uses settings from .env)
 python scripts/index_data.py
 
 # Skip vector indexing (Qdrant)
@@ -236,10 +239,33 @@ python scripts/index_data.py --skip-graph
 ```
 
 **What it does:**
-- Loads 100 samples from each of the 4 datasets
-- Chunks and embeds texts using BAAI/bge-small-en-v1.5
+- Loads samples from each dataset (configurable via .env)
+- Chunks and embeds texts using configured embedding model
 - Stores vectors in Qdrant with dataset metadata tagging
 - Extracts and stores graph triples in Neo4j (for 2WikiMultiHopQA)
+
+**Configuration via .env:**
+```bash
+# Number of samples to index (-1 = ALL, 0 = skip, N = N samples)
+HOTPOTQA_SAMPLE_SIZE=100
+TWOWIKI_SAMPLE_SIZE=100
+MUSIQUE_SAMPLE_SIZE=100
+MULTIHOP_RAG_SAMPLE_SIZE=100
+
+# Which splits to use
+HOTPOTQA_SPLIT=validation
+TWOWIKI_SPLIT=train
+MUSIQUE_SPLIT=validation
+MULTIHOP_RAG_SPLIT=train
+```
+
+**Dataset Sizes:**
+| Dataset | Split | Total Samples | Default Indexed |
+|---------|-------|--------------|-----------------|
+| HotpotQA | validation | ~7,405 | 100 |
+| 2WikiMultiHopQA | train | ~167,454 | 100 |
+| MuSiQue | validation | ~2,417 | 100 |
+| MultiHop-RAG | train | ~2,556 | 100 |
 
 ### 3. Run Evaluation
 
@@ -853,5 +879,524 @@ RAGify/
 - [ ] Run tests: `pytest`
 
 ---
+
+---
+
+## Complete End-to-End Workflow
+
+This section provides a comprehensive step-by-step guide to run the entire RAGify pipeline, test all functionalities, and use MLflow to compare results.
+
+### Phase 1: Initial Setup
+
+```bash
+# 1. Clone and navigate to project (if not already done)
+cd RAGify
+
+# 2. Activate virtual environment
+.venv\Scripts\activate  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# 3. Install dependencies (if not already done)
+pip install -r requirements.txt
+
+# 4. Copy environment template
+copy .env.example .env  # Windows
+# cp .env.example .env  # Linux/Mac
+
+# 5. Edit .env with your API keys and preferences
+# Minimum required: OPENROUTER_API_KEY or OPENAI_API_KEY
+```
+
+### Phase 2: Configure Your Environment
+
+Edit `.env` file with your settings:
+
+```bash
+# Required API Key
+OPENROUTER_API_KEY=sk-or-v1-your-key-here
+
+# For quick testing (small sample)
+HOTPOTQA_SAMPLE_SIZE=100
+TWOWIKI_SAMPLE_SIZE=100
+MUSIQUE_SAMPLE_SIZE=100
+MULTIHOP_RAG_SAMPLE_SIZE=100
+
+# For full benchmark (uncomment when ready)
+# HOTPOTQA_SAMPLE_SIZE=-1
+# TWOWIKI_SAMPLE_SIZE=-1
+# MUSIQUE_SAMPLE_SIZE=-1
+# MULTIHOP_RAG_SAMPLE_SIZE=-1
+
+# Recommended balanced models
+EVALUATION_MODEL=openrouter/anthropic/claude-3-haiku
+DECOMPOSITION_MODEL=openrouter/openai/gpt-4o-mini
+ENTITY_EXTRACTION_MODEL=openrouter/anthropic/claude-3-haiku
+GENERATION_MODEL=openrouter/openai/gpt-4o-mini
+AGENTIC_MODEL=openrouter/anthropic/claude-3-haiku
+```
+
+### Phase 3: Start Infrastructure
+
+```bash
+# Start Qdrant and Neo4j containers
+docker compose up -d
+
+# Verify services are running
+docker ps
+
+# Check configuration
+python scripts/index_data.py --show-config
+python scripts/evaluate_strategy.py --show-config
+```
+
+### Phase 4: Index Data
+
+```bash
+# Index data (uses settings from .env)
+python scripts/index_data.py
+
+# Skip graph indexing (if you only need vector search)
+python scripts/index_data.py --skip-graph
+
+# Skip vector indexing (if you only need graph)
+python scripts/index_data.py --skip-vector
+
+# For full dataset indexing, update .env first, then:
+# python scripts/index_data.py
+```
+
+### Phase 5: Run Tests
+
+```bash
+# Run all unit tests (no Docker required for these)
+pytest tests/ -v -k "not integration"
+
+# Run specific test categories
+pytest tests/evaluation/ -v
+pytest tests/indexing/ -v
+pytest tests/loaders/ -v
+pytest tests/strategies/ -v -k "not integration"
+
+# Run with coverage report
+pytest tests/ -v -k "not integration" --cov=src --cov-report=html
+# Then open: htmlcov/index.html
+
+# Run integration tests (requires Docker containers running)
+pytest tests/strategies/integration/ -v
+```
+
+### Phase 6: Understanding the Evaluation Scripts
+
+RAGify has **two evaluation scripts**:
+
+#### Script 1: `evaluate_strategy.py` - Quick RAGAS Evaluation Only
+This script **only evaluates pre-generated answers** (dummy data or your JSON file). It does NOT run RAG strategies.
+
+```bash
+# Use this when you already have answers + contexts to evaluate
+python scripts/evaluate_strategy.py --input my_results.json --output results.csv
+```
+
+#### Script 2: `run_rag_evaluation.py` - Full RAG Pipeline (NEW)
+This script **runs the complete RAG pipeline**:
+1. Loads questions from indexed datasets
+2. Runs through specified RAG strategy (Naive/Graph/Agentic/Decomposition)
+3. Generates answers using LLM + retrieval
+4. Evaluates with RAGAS
+5. Logs to MLflow
+
+```bash
+# Evaluate NaiveRAG on HotpotQA (100 samples)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100
+
+# Evaluate GraphRAG on 2WikiMultiHopQA
+python scripts/run_rag_evaluation.py --strategy graph --dataset 2WikiMultiHopQA --samples 50
+
+# Evaluate with specific model
+python scripts/run_rag_evaluation.py --strategy decomposition --dataset HotpotQA \
+  --model openrouter/anthropic/claude-3.5-sonnet --samples 100
+```
+
+### Phase 7: Run Complete RAG Evaluations with Different Strategies
+
+Test different RAG strategies and models, track everything in MLflow:
+
+#### Step 1: Evaluate Each RAG Strategy
+
+```bash
+# --- NAIVE RAG ---
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --run-name "naive_hotpot_100"
+
+# --- GRAPH RAG ---
+python scripts/run_rag_evaluation.py --strategy graph --dataset HotpotQA --samples 100 \
+  --run-name "graph_hotpot_100"
+
+# --- AGENTIC RAG ---
+python scripts/run_rag_evaluation.py --strategy agentic --dataset HotpotQA --samples 100 \
+  --run-name "agentic_hotpot_100"
+
+# --- DECOMPOSITION RAG ---
+python scripts/run_rag_evaluation.py --strategy decomposition --dataset HotpotQA --samples 100 \
+  --run-name "decomposition_hotpot_100"
+```
+
+#### Step 2: Compare Different Models (Same Strategy)
+
+```bash
+# Test different generation models with NaiveRAG
+
+# GPT-4o Mini (fast & cheap)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --model openrouter/openai/gpt-4o-mini --run-name "naive_gpt4omini"
+
+# Claude 3 Haiku (balanced)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --model openrouter/anthropic/claude-3-haiku --run-name "naive_haiku"
+
+# Claude 3.5 Sonnet (premium)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --model openrouter/anthropic/claude-3.5-sonnet --run-name "naive_sonnet"
+
+# Mistral 7B (budget)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --model openrouter/mistralai/mistral-7b-instruct --run-name "naive_mistral"
+```
+
+#### Step 3: Test Different Datasets
+
+```bash
+# Same strategy, different datasets
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --run-name "naive_hotpot"
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset 2WikiMultiHopQA --samples 100 \
+  --run-name "naive_2wiki"
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset MuSiQue --samples 100 \
+  --run-name "naive_musique"
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset MultiHopRAG --samples 100 \
+  --run-name "naive_multihop"
+```
+
+### Phase 8: Compare Results in MLflow
+
+```bash
+# Start MLflow UI
+mlflow ui
+
+# Open browser and go to: http://localhost:5000
+```
+
+In MLflow UI:
+1. **View All Runs**: See all your evaluation runs in the "RAGify_Evaluations" experiment
+2. **Compare Runs**: Select multiple runs and click "Compare" to see side-by-side metrics
+3. **View Metrics**: See average scores for:
+   - Context Precision
+   - Context Recall
+   - Faithfulness
+   - Answer Relevancy
+4. **Download Artifacts**: Each run includes the detailed CSV results
+
+### Phase 9: Advanced Evaluation Scenarios
+
+#### Scenario A: Test with Different Sample Counts
+
+```bash
+# Test with different evaluation sample sizes (not indexing size)
+# Uses same indexed data, just evaluates on different number of questions
+
+# Small test (50 questions)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 50 \
+  --run-name "naive_50samples"
+
+# Medium test (200 questions)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 200 \
+  --run-name "naive_200samples"
+
+# Full test (1000 questions - make sure you indexed enough!)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 1000 \
+  --run-name "naive_1000samples"
+```
+
+#### Scenario B: Test on Different Datasets
+
+```bash
+# First, make sure you indexed all datasets you want to test
+# Edit .env:
+HOTPOTQA_SAMPLE_SIZE=1000
+TWOWIKI_SAMPLE_SIZE=1000
+MUSIQUE_SAMPLE_SIZE=1000
+MULTIHOP_RAG_SAMPLE_SIZE=1000
+
+python scripts/index_data.py
+
+# Now test same strategy on all datasets
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100 \
+  --run-name "naive_hotpot"
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset 2WikiMultiHopQA --samples 100 \
+  --run-name "naive_2wiki"
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset MuSiQue --samples 100 \
+  --run-name "naive_musique"
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset MultiHopRAG --samples 100 \
+  --run-name "naive_multihop"
+```
+
+#### Scenario C: Compare All 4 RAG Strategies Side-by-Side
+
+```bash
+# Index enough data first
+HOTPOTQA_SAMPLE_SIZE=500
+python scripts/index_data.py
+
+# Run all strategies on same dataset
+for strategy in naive graph agentic decomposition; do
+  python scripts/run_rag_evaluation.py --strategy $strategy --dataset HotpotQA --samples 100 \
+    --run-name "${strategy}_comparison" --output "results_${strategy}.csv"
+done
+
+# Then view all in MLflow to compare
+mlflow ui
+```
+
+### Phase 10: View and Analyze Results
+
+```bash
+# View CSV results directly
+type results_baseline.csv  # Windows
+# cat results_baseline.csv  # Linux/Mac
+
+# Python analysis
+python -c "
+import pandas as pd
+df = pd.read_csv('results_baseline.csv')
+print(df.describe())
+print('\nAverage Metrics:')
+print(df[['context_precision', 'context_recall', 'faithfulness', 'answer_relevancy']].mean())
+"
+```
+
+### Phase 11: Cleanup
+
+```bash
+# Stop Docker containers
+docker compose down
+
+# To remove all data (WARNING: deletes indexed data)
+docker compose down -v
+
+# Remove MLflow runs (if needed)
+# rm -rf mlruns/
+```
+
+---
+
+## Quick Reference Command Cheat Sheet
+
+| Task | Command |
+|------|---------|
+| **Setup** | `copy .env.example .env` → Edit with API keys |
+| **Start Infra** | `docker compose up -d` |
+| **Show Config** | `python scripts/evaluate_strategy.py --show-config` |
+| **Index Data** | `python scripts/index_data.py` |
+| **Run Tests** | `pytest tests/ -v -k "not integration"` |
+| **Full RAG Eval** | `python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100` |
+| **MLflow UI** | `mlflow ui` → http://localhost:5000 |
+| **Stop Infra** | `docker compose down` |
+
+### Script Differences
+
+| Script | Purpose | Use When |
+|--------|---------|----------|
+| `evaluate_strategy.py` | Evaluates pre-generated answers | You have JSON with answers/contexts already |
+| `run_rag_evaluation.py` | Full RAG pipeline + evaluation | You want to test RAG strategies end-to-end |
+
+---
+
+## Example Complete Workflow (Copy & Paste)
+
+```bash
+# 1. Setup
+copy .env.example .env
+# (Edit .env with OPENROUTER_API_KEY)
+
+# 2. Start infrastructure
+docker compose up -d
+
+# 3. Index small sample for testing (100 samples each)
+python scripts/index_data.py
+
+# 4. Run quick test
+pytest tests/ -v -k "not integration" --tb=short
+
+# 5. Test ONE RAG strategy
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 50 \
+  --run-name "test_naive"
+
+# 6. Compare ALL RAG strategies (after confirming one works)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 50 --run-name "naive_test"
+python scripts/run_rag_evaluation.py --strategy graph --dataset HotpotQA --samples 50 --run-name "graph_test"
+python scripts/run_rag_evaluation.py --strategy agentic --dataset HotpotQA --samples 50 --run-name "agentic_test"
+python scripts/run_rag_evaluation.py --strategy decomposition --dataset HotpotQA --samples 50 --run-name "decomposition_test"
+
+# 7. View results in MLflow
+mlflow ui
+# Open http://localhost:5000
+
+# 8. For full benchmark:
+#    - Edit .env to set all SAMPLE_SIZE=-1 (or larger number)
+#    - Re-index with more data
+#    - Re-run evaluations with more samples
+
+# Edit .env: HOTPOTQA_SAMPLE_SIZE=1000, etc.
+python scripts/index_data.py
+
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 500 \
+  --run-name "naive_full"
+python scripts/run_rag_evaluation.py --strategy graph --dataset HotpotQA --samples 500 \
+  --run-name "graph_full"
+```
+
+---
+
+## How RAG Evaluation Works (Data Flow)
+
+Understanding how data flows through the evaluation pipeline:
+
+### 1. Data Loading Flow
+
+```
+HuggingFace Datasets
+├── HotpotQA (7,405 val samples)
+├── 2WikiMultiHopQA (167,454 train samples)
+├── MuSiQue (2,417 val samples)
+└── MultiHopRAG (2,556 train samples)
+         ↓
+   Dataset Loaders (src/loaders/)
+         ↓
+   UnifiedQASample (standardized format)
+         ↓
+   Indexing (scripts/index_data.py)
+         ├── Qdrant (vector DB) - for Naive/Agentic/Decomposition
+         └── Neo4j (graph DB) - for GraphRAG
+```
+
+### 2. Evaluation Flow
+
+```
+Evaluation Script (scripts/run_rag_evaluation.py)
+         ↓
+   Load Questions from Dataset
+   (e.g., 100 questions from HotpotQA)
+         ↓
+   For Each Question:
+         ├── RAG Strategy retrieves context
+         │   ├── NaiveRAG: Vector search (Qdrant)
+         │   ├── GraphRAG: Graph traversal (Neo4j)
+         │   ├── AgenticRAG: Multi-step tool use
+         │   └── DecompositionRAG: Sub-query + parallel retrieval
+         │
+         └── LLM generates answer
+         ↓
+   RAGAS Evaluation
+         ├── Context Precision: Was relevant context retrieved?
+         ├── Context Recall: Was all necessary context retrieved?
+         ├── Faithfulness: Is answer grounded in context?
+         └── Answer Relevancy: Does answer match question?
+         ↓
+   MLflow Logging
+         ├── Parameters (strategy, model, dataset)
+         ├── Metrics (average scores)
+         └── Artifacts (detailed CSV results)
+```
+
+### 3. What Gets Evaluated?
+
+| Component | Source | What It Does |
+|-----------|--------|--------------|
+| **Questions** | HuggingFace datasets | Multi-hop QA questions |
+| **Contexts** | Qdrant/Neo4j (indexed) | Retrieved by RAG strategy |
+| **Answers** | LLM (OpenRouter) | Generated from context |
+| **Ground Truth** | HuggingFace datasets | Correct answer from dataset |
+| **Metrics** | RAGAS framework | Automated quality scoring |
+
+### 4. Example Data Flow
+
+For a single HotpotQA question:
+
+```json
+{
+  "question": "Who is the director of the movie starring Tom Hanks and Meg Ryan?",
+  "ground_truth": "Nora Ephron",
+  
+  // RAG Strategy retrieves:
+  "contexts": [
+    "Tom Hanks and Meg Ryan starred in 'Sleepless in Seattle' (1993)...",
+    "'Sleepless in Seattle' was directed by Nora Ephron..."
+  ],
+  
+  // LLM generates:
+  "answer": "Nora Ephron directed 'Sleepless in Seattle' starring Tom Hanks and Meg Ryan.",
+  
+  // RAGAS evaluates:
+  "context_precision": 1.0,  // Both contexts relevant
+  "context_recall": 1.0,     // All needed info retrieved
+  "faithfulness": 1.0,       // Answer supported by context
+  "answer_relevancy": 1.0    // Directly answers question
+}
+```
+
+---
+
+## FAQ: Common Questions
+
+### Q: Why two evaluation scripts?
+
+**A:** 
+- `evaluate_strategy.py`: For evaluating pre-generated results (you already have answers)
+- `run_rag_evaluation.py`: For running full RAG pipeline (generates answers + evaluates)
+
+### Q: Do I need to index data before running evaluations?
+
+**A:** Yes! For `run_rag_evaluation.py`, you must:
+1. Run `python scripts/index_data.py` first
+2. The strategy needs to retrieve from Qdrant/Neo4j
+
+### Q: Can I evaluate on different datasets than I indexed?
+
+**A:** No. You can only evaluate on datasets you indexed. The retrievers query the indexed data.
+
+### Q: How do I compare strategies fairly?
+
+**A:** Use the **same** dataset and **same** questions:
+```bash
+# Same 100 questions, different strategies
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100
+python scripts/run_rag_evaluation.py --strategy graph --dataset HotpotQA --samples 100
+python scripts/run_rag_evaluation.py --strategy agentic --dataset HotpotQA --samples 100
+```
+
+### Q: What's the difference between indexing sample size and evaluation sample size?
+
+**A:** 
+- **Indexing sample size** (`HOTPOTQA_SAMPLE_SIZE`): How many documents to index in the database
+- **Evaluation sample size** (`--samples`): How many questions to test (must be ≤ indexed)
+
+Example:
+```bash
+# Index 1000 documents
+HOTPOTQA_SAMPLE_SIZE=1000
+python scripts/index_data.py
+
+# Evaluate on 100 of them
+python scripts/run_rag_evaluation.py --samples 100
+
+# Later evaluate on all 1000
+python scripts/run_rag_evaluation.py --samples 1000
+```
 
 *Generated for RAGify Project - Last Updated: 2026-02-27*
