@@ -1,0 +1,24 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant_ragify
+    ports:
+      - "6333:6333" # REST API
+      - "6334:6334" # gRPC
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    restart: always
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: neo4j_ragify
+    environment:
+      - NEO4J_AUTH=neo4j/password
+      # Allow APOC plugins to execute if needed later
+      - NEO4J_PLUGINS=["apoc"]
+    ports:
+      - "7474:7474" # HTTP Browser
+      - "7687:7687" # Bolt Protocol
+    volumes:
+      - ./neo4j_data:/data
+    restart: always

@@ -1,0 +1,3 @@
+"""
+Makes indexing a module.
+"""

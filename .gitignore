@@ -35,3 +35,12 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+
+#indexing
+qdrant_data/
+neo4j_data/
+
+
+#mcp
+excalidraw-mcp

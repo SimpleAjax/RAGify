@@ -1,0 +1,3 @@
+"""
+Makes decomposition a module.
+"""
