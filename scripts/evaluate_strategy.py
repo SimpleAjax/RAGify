@@ -11,24 +11,22 @@ from src.evaluation.tracker import ExperimentTracker
 
 def main():
     parser = argparse.ArgumentParser(description="Run Ragas Evaluation using LiteLLM Wrapper")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="LiteLLM model name (e.g., 'ollama/llama3', 'gpt-4o-mini')")
-    parser.add_argument("--api-base", type=str, default=None, help="Base URL for the model API (e.g., 'http://localhost:11434' for Ollama)")
+    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="LiteLLM model name (e.g., 'ollama/llama3', 'gpt-4o-mini', 'openrouter/openai/gpt-4o')")
+    parser.add_argument("--api-base", type=str, default=None, help="Base URL for the model API (e.g., 'https://openrouter.ai/api/v1', 'http://localhost:11434' for Ollama)")
+    parser.add_argument("--api-key", type=str, default=None, help="API key (if not set, uses OPENAI_API_KEY or OPENROUTER_API_KEY env var)")
     parser.add_argument("--input", type=str, help="Path to JSON file containing array of samples (requires keys: question, answer, contexts, ground_truth).")
     parser.add_argument("--output", type=str, default="evaluation_results.csv", help="Path to save the output CSV")
     parser.add_argument("--run-name", type=str, default=None, help="Optional name for the MLflow run")
     
     args = parser.parse_args()
 
-    # Need OPENAI_API_KEY even if using Ollama for LiteLLM fake initialization if we rely on it, 
-    # but the Evaluator handles this partially. To be safe:
-    if not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = "fake-key-for-local-models"
-
     print(f"Initializing Ragas Evaluator with model: {args.model}")
     if args.api_base:
         print(f"Using API Base: {args.api_base}")
+    if args.api_key:
+        print("Using provided API key")
         
-    evaluator = RagasEvaluator(model_name=args.model, api_base=args.api_base)
+    evaluator = RagasEvaluator(model_name=args.model, api_base=args.api_base, api_key=args.api_key)
 
     if args.input:
         print(f"Loading data from {args.input}")

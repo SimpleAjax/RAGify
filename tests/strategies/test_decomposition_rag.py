@@ -8,16 +8,20 @@ from src.strategies.decomposition.base import DecompositionRAG, SubQueriesList, 
 
 def test_decomposition_rag_execution():
     # 1. Mock Retriever
-    mock_retriever = MagicMock()
-    # Give different context based on sub-query
-    def return_docs(query):
-        if "Paris" in query:
-            return [Document(page_content="Eiffel Tower is in Paris.")]
-        elif "tall" in query:
-            return [Document(page_content="Eiffel Tower is 330 meters tall.")]
-        return []
+    # Use a callable class instead of MagicMock to avoid auto-created 'invoke' attribute
+    class MockRetriever:
+        def __init__(self):
+            self.call_args_list = []
         
-    mock_retriever.side_effect = return_docs
+        def __call__(self, query):
+            self.call_args_list.append(query)
+            if "Paris" in query:
+                return [Document(page_content="Eiffel Tower is in Paris.")]
+            elif "tall" in query:
+                return [Document(page_content="Eiffel Tower is 330 meters tall.")]
+            return []
+    
+    mock_retriever = MockRetriever()
     
     # 2. Mock LLM
     mock_llm = MagicMock()

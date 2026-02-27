@@ -108,8 +108,9 @@ docker compose down -v
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OPENAI_API_KEY` | Yes* | - | OpenAI API key for LLM calls |
+| `OPENROUTER_API_KEY` | Optional | - | OpenRouter API key (alternative to OPENAI_API_KEY) |
 
-*Required when using OpenAI models. For local models (Ollama), set to any non-empty string.
+*Required when using OpenAI models directly. For OpenRouter or local models (Ollama), use respective keys.
 
 ### Setting Environment Variables
 
@@ -151,12 +152,14 @@ export OPENAI_API_KEY="your-api-key-here"
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `model_name` | `"gpt-4o-mini"` | LiteLLM model identifier |
-| `api_base` | `None` | Custom API base URL (e.g., Ollama) |
+| `api_base` | `None` | Custom API base URL (e.g., OpenRouter, Ollama) |
+| `api_key` | `None` | API key (uses env vars if not provided) |
 
 **Supported Model Formats:**
 - OpenAI: `gpt-4o-mini`, `gpt-4o`, `gpt-3.5-turbo`
 - Ollama: `ollama/llama3`, `ollama/mistral`
 - Anthropic: `claude-3-sonnet`
+- **OpenRouter**: `openrouter/openai/gpt-4o`, `openrouter/anthropic/claude-3.5-sonnet`, `openrouter/google/gemini-pro`, etc.
 
 #### ExperimentTracker (`src/evaluation/tracker.py`)
 | Parameter | Default | Description |
@@ -207,6 +210,12 @@ Evaluate RAG strategies using RAGAS metrics:
 # Using OpenAI (default)
 python scripts/evaluate_strategy.py --model gpt-4o-mini --output results.csv
 
+# Using OpenRouter (any model)
+python scripts/evaluate_strategy.py \
+  --model openrouter/anthropic/claude-3.5-sonnet \
+  --api-base https://openrouter.ai/api/v1 \
+  --output results.csv
+
 # Using Ollama (local)
 python scripts/evaluate_strategy.py \
   --model ollama/llama3 \
@@ -238,6 +247,134 @@ python scripts/evaluate_strategy.py \
 ```bash
 mlflow ui
 # Open http://localhost:5000 in browser
+```
+
+---
+
+## Using OpenRouter
+
+[OpenRouter](https://openrouter.ai/) provides a unified API for accessing 200+ LLMs from various providers (OpenAI, Anthropic, Google, Meta, etc.) through a single endpoint.
+
+### Why Use OpenRouter?
+- Access to 200+ models from different providers
+- Pay-as-you-go pricing
+- Standardized API format
+- No need to manage multiple API keys
+
+### Setup
+
+**1. Get an API Key**
+- Sign up at [openrouter.ai](https://openrouter.ai/)
+- Generate an API key from your dashboard
+
+**2. Set Environment Variable**
+
+```bash
+# Windows (PowerShell)
+$env:OPENROUTER_API_KEY = "your-openrouter-key"
+
+# Windows (CMD)
+set OPENROUTER_API_KEY=your-openrouter-key
+
+# Linux/Mac
+export OPENROUTER_API_KEY="your-openrouter-key"
+```
+
+### Usage Examples
+
+**Using OpenRouter with any model:**
+
+```bash
+# GPT-4o via OpenRouter
+python scripts/evaluate_strategy.py \
+  --model openrouter/openai/gpt-4o \
+  --api-base https://openrouter.ai/api/v1 \
+  --output results.csv
+
+# Claude 3.5 Sonnet via OpenRouter
+python scripts/evaluate_strategy.py \
+  --model openrouter/anthropic/claude-3.5-sonnet \
+  --api-base https://openrouter.ai/api/v1 \
+  --output results.csv
+
+# Google Gemini Pro via OpenRouter
+python scripts/evaluate_strategy.py \
+  --model openrouter/google/gemini-pro \
+  --api-base https://openrouter.ai/api/v1 \
+  --output results.csv
+
+# Meta Llama 3 via OpenRouter
+python scripts/evaluate_strategy.py \
+  --model openrouter/meta-llama/llama-3-70b-instruct \
+  --api-base https://openrouter.ai/api/v1 \
+  --output results.csv
+```
+
+**Passing API key directly (not recommended for production):**
+
+```bash
+python scripts/evaluate_strategy.py \
+  --model openrouter/anthropic/claude-3.5-sonnet \
+  --api-base https://openrouter.ai/api/v1 \
+  --api-key sk-or-v1-your-key-here \
+  --output results.csv
+```
+
+### Popular OpenRouter Models
+
+| Model | OpenRouter Identifier | Provider |
+|-------|----------------------|----------|
+| GPT-4o | `openrouter/openai/gpt-4o` | OpenAI |
+| GPT-4o Mini | `openrouter/openai/gpt-4o-mini` | OpenAI |
+| Claude 3.5 Sonnet | `openrouter/anthropic/claude-3.5-sonnet` | Anthropic |
+| Claude 3 Opus | `openrouter/anthropic/claude-3-opus` | Anthropic |
+| Gemini Pro 1.5 | `openrouter/google/gemini-pro-1.5` | Google |
+| Llama 3 70B | `openrouter/meta-llama/llama-3-70b-instruct` | Meta |
+| Mistral Large | `openrouter/mistralai/mistral-large` | Mistral |
+| DeepSeek V3 | `openrouter/deepseek/deepseek-chat` | DeepSeek |
+
+### Using OpenRouter in Custom Code
+
+```python
+from src.evaluation.evaluator import RagasEvaluator
+from src.strategies.naive.base import NaiveRAG
+from langchain_openai import ChatOpenAI
+
+# Initialize evaluator with OpenRouter
+evaluator = RagasEvaluator(
+    model_name="openrouter/anthropic/claude-3.5-sonnet",
+    api_base="https://openrouter.ai/api/v1",
+    api_key="your-openrouter-key"  # Or use OPENROUTER_API_KEY env var
+)
+
+# Or use with RAG strategies
+llm = ChatOpenAI(
+    model_name="openrouter/openai/gpt-4o",
+    openai_api_base="https://openrouter.ai/api/v1",
+    openai_api_key="your-openrouter-key"
+)
+
+rag = NaiveRAG(retriever=retriever, llm=llm)
+```
+
+### OpenRouter-Specific Headers (Optional)
+
+For tracking and analytics, OpenRouter supports custom headers:
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model_name="openrouter/anthropic/claude-3.5-sonnet",
+    openai_api_base="https://openrouter.ai/api/v1",
+    openai_api_key="your-openrouter-key",
+    model_kwargs={
+        "extra_headers": {
+            "HTTP-Referer": "https://your-app.com",  # Optional
+            "X-Title": "RAGify Evaluation"  # Optional
+        }
+    }
+)
 ```
 
 ---

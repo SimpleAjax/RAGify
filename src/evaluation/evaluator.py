@@ -18,16 +18,28 @@ from langchain_community.chat_models import ChatLiteLLM
 from langchain_huggingface import HuggingFaceEmbeddings
 
 class RagasEvaluator:
-    def __init__(self, model_name: str = "gpt-4o-mini", api_base: Optional[str] = None):
+    def __init__(self, model_name: str = "gpt-4o-mini", api_base: Optional[str] = None, api_key: Optional[str] = None):
         """
         Initializes the Ragas Evaluator with a LiteLLM backend.
         This provides the abstraction layer requested in Phase 4 Option C.
-        It allows seamless switching between OpenAI, Ollama, Anthropic, etc.
+        It allows seamless switching between OpenAI, Ollama, Anthropic, OpenRouter, etc.
+        
+        Args:
+            model_name: LiteLLM model identifier (e.g., 'gpt-4o-mini', 'openrouter/openai/gpt-4o')
+            api_base: Custom API base URL (e.g., 'https://openrouter.ai/api/v1')
+            api_key: API key (if None, uses environment variables)
         """
-        # Ensure we don't fail immediately if keys are missing during test instantiation
-        api_key = os.environ.get("OPENAI_API_KEY", "dummy-key-for-tests")
-        if not os.environ.get("OPENAI_API_KEY"):
-            os.environ["OPENAI_API_KEY"] = api_key
+        # Handle API keys for different providers
+        # OpenRouter uses OPENROUTER_API_KEY, OpenAI uses OPENAI_API_KEY
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key  # LiteLLM uses OPENAI_API_KEY by default
+        elif not os.environ.get("OPENAI_API_KEY"):
+            # Check for OpenRouter key if OPENAI_API_KEY is not set
+            if os.environ.get("OPENROUTER_API_KEY"):
+                os.environ["OPENAI_API_KEY"] = os.environ.get("OPENROUTER_API_KEY")
+            else:
+                # Set a dummy key for local/test models to avoid immediate failure
+                os.environ["OPENAI_API_KEY"] = "dummy-key-for-tests"
             
         # We explicitly set up LiteLLM wrapped for LangChain and Ragas
         try:
@@ -36,7 +48,7 @@ class RagasEvaluator:
         except Exception as e:
             # Fallback for old litellm/langchain mappings if any
             from langchain_openai import ChatOpenAI
-            self.llm = ChatOpenAI(model=model_name, base_url=api_base)
+            self.llm = ChatOpenAI(model=model_name, base_url=api_base, api_key=os.environ.get("OPENAI_API_KEY"))
             self.ragas_llm = LangchainLLMWrapper(self.llm)
         
         # Use a small local embeddings model for evaluating contexts
