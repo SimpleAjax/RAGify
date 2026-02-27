@@ -8,25 +8,49 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.evaluation.evaluator import RagasEvaluator
 from src.evaluation.tracker import ExperimentTracker
+from src.config import config
 
 def main():
     parser = argparse.ArgumentParser(description="Run Ragas Evaluation using LiteLLM Wrapper")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="LiteLLM model name (e.g., 'ollama/llama3', 'gpt-4o-mini', 'openrouter/openai/gpt-4o')")
-    parser.add_argument("--api-base", type=str, default=None, help="Base URL for the model API (e.g., 'https://openrouter.ai/api/v1', 'http://localhost:11434' for Ollama)")
+    parser.add_argument("--model", type=str, default=None, help="LiteLLM model name (e.g., 'ollama/llama3', 'gpt-4o-mini', 'openrouter/openai/gpt-4o'). Uses EVALUATION_MODEL from config if not specified.")
+    parser.add_argument("--api-base", type=str, default=None, help="Base URL for the model API (e.g., 'https://openrouter.ai/api/v1'). Uses EVALUATION_API_BASE from config if not specified.")
     parser.add_argument("--api-key", type=str, default=None, help="API key (if not set, uses OPENAI_API_KEY or OPENROUTER_API_KEY env var)")
     parser.add_argument("--input", type=str, help="Path to JSON file containing array of samples (requires keys: question, answer, contexts, ground_truth).")
     parser.add_argument("--output", type=str, default="evaluation_results.csv", help="Path to save the output CSV")
     parser.add_argument("--run-name", type=str, default=None, help="Optional name for the MLflow run")
+    parser.add_argument("--show-config", action="store_true", help="Show current configuration and exit")
     
     args = parser.parse_args()
 
-    print(f"Initializing Ragas Evaluator with model: {args.model}")
-    if args.api_base:
-        print(f"Using API Base: {args.api_base}")
+    # Show config and exit if requested
+    if args.show_config:
+        config.print_config()
+        sys.exit(0)
+    
+    # Validate config
+    errors = config.validate()
+    if errors:
+        print("Configuration Errors:")
+        for error in errors:
+            print(f"  - {error}")
+        print("\nPlease check your .env file or set the required environment variables.")
+        print("Copy .env.example to .env and fill in your API keys.")
+        sys.exit(1)
+    
+    # Show config at startup
+    config.print_config()
+    
+    # Use config defaults if not provided via CLI
+    model_name = args.model or config.EVALUATION_MODEL
+    api_base = args.api_base or config.EVALUATION_API_BASE
+
+    print(f"\nInitializing Ragas Evaluator with model: {model_name}")
+    if api_base:
+        print(f"Using API Base: {api_base}")
     if args.api_key:
         print("Using provided API key")
         
-    evaluator = RagasEvaluator(model_name=args.model, api_base=args.api_base, api_key=args.api_key)
+    evaluator = RagasEvaluator(model_name=model_name, api_base=api_base, api_key=args.api_key)
 
     if args.input:
         print(f"Loading data from {args.input}")

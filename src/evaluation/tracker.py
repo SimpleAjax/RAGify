@@ -3,21 +3,26 @@ import mlflow
 import pandas as pd
 from typing import Dict, Any, Optional
 
+from src.config import config
+
 class ExperimentTracker:
-    def __init__(self, experiment_name: str = "RAGify_Evaluations", tracking_uri: str = "./mlruns"):
+    def __init__(self, experiment_name: str = None, tracking_uri: str = None):
         """
         Initializes the MLflow Experiment Tracker.
         Args:
             experiment_name (str): Name of the experiment to log runs under.
-            tracking_uri (str): URI for the MLflow tracking server (default is local folder).
+                                  If None, uses MLFLOW_EXPERIMENT_NAME from config.
+            tracking_uri (str): URI for the MLflow tracking server.
+                               If None, uses MLFLOW_TRACKING_URI from config.
         """
-        self.experiment_name = experiment_name
+        self.experiment_name = experiment_name or config.MLFLOW_EXPERIMENT_NAME
+        self.tracking_uri = tracking_uri or config.MLFLOW_TRACKING_URI
         
         # Ensure we set the tracking URI before setting the experiment
-        mlflow.set_tracking_uri(tracking_uri)
+        mlflow.set_tracking_uri(self.tracking_uri)
         
         # Set the experiment, creating it if it doesn't already exist
-        mlflow.set_experiment(experiment_name)
+        mlflow.set_experiment(self.experiment_name)
 
     def start_run(self, run_name: Optional[str] = None):
         """

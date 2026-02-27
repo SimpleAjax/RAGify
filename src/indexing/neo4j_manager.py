@@ -2,15 +2,21 @@ from typing import List, Dict, Any
 from neo4j import GraphDatabase
 
 from src.schema import UnifiedQASample
+from src.config import config
 
 class Neo4jManager:
     """
     Handles connecting to Neo4j and pushing graph metadata (triples) into the database.
     Ensures strict Multi-Tenancy segregation via Node Labels and Properties mapping to 'dataset'.
     """
-    def __init__(self, uri: str = "bolt://localhost:7687", user: str = "neo4j", password: str = "password"):
-        print(f"Connecting to Neo4j at {uri}")
-        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+    def __init__(self, uri: str = None, user: str = None, password: str = None):
+        # Use config defaults if not provided
+        self.uri = uri or config.NEO4J_URI
+        self.user = user or config.NEO4J_USER
+        self.password = password or config.NEO4J_PASSWORD
+        
+        print(f"Connecting to Neo4j at {self.uri}")
+        self.driver = GraphDatabase.driver(self.uri, auth=(self.user, self.password))
         self._ensure_constraints()
 
     def close(self):

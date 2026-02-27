@@ -101,16 +101,55 @@ docker compose down -v
 
 ---
 
-## Configuration Parameters
+## Configuration via Environment Variables (.env)
 
-### Environment Variables
+RAGify uses a `.env` file for configuration. Copy `.env.example` to `.env` and customize:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `OPENAI_API_KEY` | Yes* | - | OpenAI API key for LLM calls |
-| `OPENROUTER_API_KEY` | Optional | - | OpenRouter API key (alternative to OPENAI_API_KEY) |
+```bash
+copy .env.example .env  # Windows
+# cp .env.example .env  # Linux/Mac
+```
 
-*Required when using OpenAI models directly. For OpenRouter or local models (Ollama), use respective keys.
+Then edit `.env` with your API keys and preferred models.
+
+### Required API Keys
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENROUTER_API_KEY` | Yes* | OpenRouter API key (recommended) |
+| `OPENAI_API_KEY` | Alternative | OpenAI API key (if not using OpenRouter) |
+
+*Get your OpenRouter key from https://openrouter.ai/keys
+
+### Model Configuration
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EVALUATION_MODEL` | `openrouter/anthropic/claude-3-haiku` | RAGAS evaluation (frequent calls) |
+| `DECOMPOSITION_MODEL` | `openrouter/openai/gpt-4o-mini` | Query decomposition (JSON output) |
+| `ENTITY_EXTRACTION_MODEL` | `openrouter/anthropic/claude-3-haiku` | GraphRAG entity extraction |
+| `GENERATION_MODEL` | `openrouter/openai/gpt-4o-mini` | Answer generation |
+| `AGENTIC_MODEL` | `openrouter/anthropic/claude-3-haiku` | Agentic RAG reasoning |
+
+### Alternative: Single Model for All RAG Tasks
+
+Set `RAG_MODEL` to use one model for all strategies instead of individual models:
+
+```bash
+RAG_MODEL=openrouter/openai/gpt-4o-mini
+RAG_API_BASE=https://openrouter.ai/api/v1
+```
+
+### Other Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EMBEDDING_MODEL_NAME` | `BAAI/bge-small-en-v1.5` | Local embedding model (FREE) |
+| `QDRANT_HOST` | `localhost` | Qdrant server host |
+| `QDRANT_PORT` | `6333` | Qdrant server port |
+| `NEO4J_URI` | `bolt://localhost:7687` | Neo4j connection URI |
+| `CHUNK_SIZE` | `512` | Text chunking size |
+| `CHUNK_OVERLAP` | `50` | Text chunking overlap |
 
 ### Setting Environment Variables
 
@@ -207,28 +246,25 @@ python scripts/index_data.py --skip-graph
 Evaluate RAG strategies using RAGAS metrics:
 
 ```bash
-# Using OpenAI (default)
-python scripts/evaluate_strategy.py --model gpt-4o-mini --output results.csv
+# Show current configuration
+python scripts/evaluate_strategy.py --show-config
 
-# Using OpenRouter (any model)
+# Run with default model from .env (EVALUATION_MODEL)
+python scripts/evaluate_strategy.py --output results.csv
+
+# Override with specific model
 python scripts/evaluate_strategy.py \
   --model openrouter/anthropic/claude-3.5-sonnet \
-  --api-base https://openrouter.ai/api/v1 \
-  --output results.csv
-
-# Using Ollama (local)
-python scripts/evaluate_strategy.py \
-  --model ollama/llama3 \
-  --api-base http://localhost:11434 \
   --output results.csv
 
 # With custom input file
 python scripts/evaluate_strategy.py \
-  --model gpt-4o-mini \
   --input eval_data.json \
   --output results.csv \
   --run-name "experiment_1"
 ```
+
+The script will automatically use models from your `.env` file. No need to specify `--model` and `--api-base` every time!
 
 **Input JSON format (`eval_data.json`):**
 ```json

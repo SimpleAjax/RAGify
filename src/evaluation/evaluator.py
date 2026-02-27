@@ -17,8 +17,10 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_huggingface import HuggingFaceEmbeddings
 
+from src.config import config
+
 class RagasEvaluator:
-    def __init__(self, model_name: str = "gpt-4o-mini", api_base: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(self, model_name: Optional[str] = None, api_base: Optional[str] = None, api_key: Optional[str] = None):
         """
         Initializes the Ragas Evaluator with a LiteLLM backend.
         This provides the abstraction layer requested in Phase 4 Option C.
@@ -26,33 +28,41 @@ class RagasEvaluator:
         
         Args:
             model_name: LiteLLM model identifier (e.g., 'gpt-4o-mini', 'openrouter/openai/gpt-4o')
+                       If None, uses EVALUATION_MODEL from config.
             api_base: Custom API base URL (e.g., 'https://openrouter.ai/api/v1')
+                     If None, uses EVALUATION_API_BASE from config.
             api_key: API key (if None, uses environment variables)
         """
+        # Use config defaults if not provided
+        self.model_name = model_name or config.EVALUATION_MODEL
+        self.api_base = api_base or config.EVALUATION_API_BASE
+        
         # Handle API keys for different providers
         # OpenRouter uses OPENROUTER_API_KEY, OpenAI uses OPENAI_API_KEY
         if api_key:
             os.environ["OPENAI_API_KEY"] = api_key  # LiteLLM uses OPENAI_API_KEY by default
         elif not os.environ.get("OPENAI_API_KEY"):
             # Check for OpenRouter key if OPENAI_API_KEY is not set
-            if os.environ.get("OPENROUTER_API_KEY"):
-                os.environ["OPENAI_API_KEY"] = os.environ.get("OPENROUTER_API_KEY")
+            if config.OPENROUTER_API_KEY:
+                os.environ["OPENAI_API_KEY"] = config.OPENROUTER_API_KEY
+            elif config.OPENAI_API_KEY:
+                os.environ["OPENAI_API_KEY"] = config.OPENAI_API_KEY
             else:
                 # Set a dummy key for local/test models to avoid immediate failure
                 os.environ["OPENAI_API_KEY"] = "dummy-key-for-tests"
             
         # We explicitly set up LiteLLM wrapped for LangChain and Ragas
         try:
-            self.llm = ChatLiteLLM(model=model_name, api_base=api_base)
+            self.llm = ChatLiteLLM(model=self.model_name, api_base=self.api_base)
             self.ragas_llm = LangchainLLMWrapper(self.llm)
         except Exception as e:
             # Fallback for old litellm/langchain mappings if any
             from langchain_openai import ChatOpenAI
-            self.llm = ChatOpenAI(model=model_name, base_url=api_base, api_key=os.environ.get("OPENAI_API_KEY"))
+            self.llm = ChatOpenAI(model=self.model_name, base_url=self.api_base, api_key=os.environ.get("OPENAI_API_KEY"))
             self.ragas_llm = LangchainLLMWrapper(self.llm)
         
-        # Use a small local embeddings model for evaluating contexts
-        hf_embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        # Use configured embedding model (local - FREE)
+        hf_embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL_NAME)
         self.ragas_embeds = LangchainEmbeddingsWrapper(hf_embeddings)
 
         self.metrics = [

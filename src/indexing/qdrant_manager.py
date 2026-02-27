@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import uuid
 
 from src.schema import UnifiedQASample
+from src.config import config
 
 class QdrantManager:
     """
@@ -15,30 +16,34 @@ class QdrantManager:
     """
     def __init__(
         self, 
-        collection_name: str = "ragify_evaluator", 
-        embedding_model_name: str = "BAAI/bge-small-en-v1.5",
-        host: str = "localhost",
-        port: int = 6333
+        collection_name: str = None, 
+        embedding_model_name: str = None,
+        host: str = None,
+        port: int = None
     ):
-        self.collection_name = collection_name
+        # Use config defaults if not provided
+        self.collection_name = collection_name or config.QDRANT_COLLECTION_NAME
+        self.embedding_model_name = embedding_model_name or config.EMBEDDING_MODEL_NAME
+        self.host = host or config.QDRANT_HOST
+        self.port = port or config.QDRANT_PORT
         
-        print(f"Initializing HuggingFace Embeddings: {embedding_model_name}")
-        self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model_name)
+        print(f"Initializing HuggingFace Embeddings: {self.embedding_model_name}")
+        self.embeddings = HuggingFaceEmbeddings(model_name=self.embedding_model_name)
         
         # Determine vector size based on the model. BAAI/bge-small-en-v1.5 has 384 dims
         # To make this dynamic, we embed a dummy string to check
         sample_vector = self.embeddings.embed_query("test")
         self.vector_size = len(sample_vector)
         
-        print(f"Connecting to Qdrant at {host}:{port}")
-        self.client = QdrantClient(host=host, port=port)
+        print(f"Connecting to Qdrant at {self.host}:{self.port}")
+        self.client = QdrantClient(host=self.host, port=self.port)
         
         self._ensure_collection_exists()
         
-        # Setup Text Splitter
+        # Setup Text Splitter with config values
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=512,
-            chunk_overlap=50,
+            chunk_size=config.CHUNK_SIZE,
+            chunk_overlap=config.CHUNK_OVERLAP,
             separators=["\n\n", "\n", " ", ""]
         )
 

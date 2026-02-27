@@ -1,6 +1,7 @@
 datasets
 pydantic
 pytest
+python-dotenv
 langchain-core<1.0.0,>=0.3.74
 tqdm
 langchain-huggingface
