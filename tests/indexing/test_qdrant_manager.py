@@ -23,11 +23,18 @@ def test_qdrant_manager_initialization(mock_embeddings_class, mock_client_class)
     # Asserts
     assert manager.vector_size == 3
     mock_client_instance.create_collection.assert_called_once()
-    mock_client_instance.create_payload_index.assert_called_once_with(
-        collection_name="ragify_evaluator",
-        field_name="dataset",
-        field_schema="keyword"
-    )
+    
+    # Should create indexes for dataset, sample_id, and composite_id
+    assert mock_client_instance.create_payload_index.call_count == 3
+    
+    # Check that all expected indexes are created
+    index_calls = mock_client_instance.create_payload_index.call_args_list
+    indexed_fields = [call.kwargs.get('field_name') or call[1].get('field_name') 
+                      for call in index_calls]
+    
+    assert "dataset" in indexed_fields
+    assert "sample_id" in indexed_fields
+    assert "composite_id" in indexed_fields
 
 @patch('src.indexing.qdrant_manager.uuid')
 @patch('src.indexing.qdrant_manager.QdrantClient')
@@ -83,4 +90,5 @@ def test_qdrant_manager_process_and_index(mock_embeddings_class, mock_client_cla
     # Crucial assertion: Did we correctly apply the Metadata filter tag?
     assert point.payload["dataset"] == "test_dataset"
     assert point.payload["sample_id"] == "test_id_1"
+    assert point.payload["composite_id"] == "test_dataset_test_id_1"  # NEW: composite_id
     assert point.payload["text"] == "This is chunk one of the document."

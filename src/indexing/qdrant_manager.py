@@ -56,12 +56,24 @@ class QdrantManager:
                 vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE),
             )
             
-            # Create a payload index on 'dataset' to make filter queries extremely fast
-            self.client.create_payload_index(
-                collection_name=self.collection_name,
-                field_name="dataset",
-                field_schema="keyword"
-            )
+            # Create payload indexes for efficient filtering and grouping
+            # These indexes enable fast filter queries and aggregations
+            indexes = [
+                ("dataset", "keyword"),           # For dataset segregation
+                ("sample_id", "keyword"),         # For sample-level lookups
+                ("composite_id", "keyword"),      # For grouping by dataset+sample
+            ]
+            
+            for field_name, field_schema in indexes:
+                try:
+                    self.client.create_payload_index(
+                        collection_name=self.collection_name,
+                        field_name=field_name,
+                        field_schema=field_schema
+                    )
+                    print(f"  Created index on '{field_name}'")
+                except Exception as e:
+                    print(f"  Warning: Could not create index on '{field_name}': {e}")
 
     def process_and_index_samples(self, samples: List[UnifiedQASample], batch_size: int = 100):
         """
@@ -80,9 +92,13 @@ class QdrantManager:
             
             # Prepare metadata mapping
             for chunk in chunks:
+                # Create composite_id for easy grouping: dataset_sample_id
+                composite_id = f"{sample.dataset_name}_{sample.sample_id}"
+                
                 payload = {
                     "dataset": sample.dataset_name,
                     "sample_id": sample.sample_id,
+                    "composite_id": composite_id,  # For easy grouping/filtering
                     "text": chunk.page_content, # The actual text used for generation later
                 }
                 

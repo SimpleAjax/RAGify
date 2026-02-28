@@ -1,0 +1,2 @@
+question,answer,contexts,ground_truth,context_precision,context_recall,faithfulness,answer_relevancy
+Test?,[DRY RUN] Fake answer,['Context'],Answer,0.5,0.5,0.5,0.5

@@ -1,0 +1,11 @@
+user_input,retrieved_contexts,response,reference,context_precision,context_recall,faithfulness,answer_relevancy
+Were Scott Derrickson and Ed Wood of the same nationality?,[],ERROR: Generation failed,yes,0.0,0.0,1.0,0.3375233075032032
+What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?,[],ERROR: Generation failed,Chief of Protocol,0.0,0.0,0.0,0.3346565396502219
+"What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?",[],ERROR: Generation failed,Animorphs,0.0,1.0,0.0,0.33747180680812133
+Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?,[],ERROR: Generation failed,no,0.0,0.0,0.0,0.2985769630332155
+"The director of the romantic comedy ""Big Stone Gap"" is based in what New York city?",[],ERROR: Generation failed,"Greenwich Village, New York City",0.0,0.0,0.0,0.31271877564945844
+2014 S/S is the debut album of a South Korean boy group that was formed by who?,[],ERROR: Generation failed,YG Entertainment,0.0,0.0,0.0,0.39193354228694943
+Who was known by his stage name Aladin and helped organizations improve their performance as a consultant?,[],ERROR: Generation failed,Eenasul Fateh,0.0,0.0,0.0,0.4205689735767804
+The arena where the Lewiston Maineiacs played their home games can seat how many people?,[],ERROR: Generation failed,"3,677 seated",0.0,0.0,1.0,0.328916655782216
+"Who is older, Annie Morton or Terry Richardson?",[],ERROR: Generation failed,Terry Richardson,0.0,0.0,0.0,0.29877209006374406
+Are Local H and For Against both from the United States?,[],ERROR: Generation failed,yes,0.0,0.0,0.0,0.3867468044700789

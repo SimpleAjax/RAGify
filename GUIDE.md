@@ -1005,8 +1005,13 @@ This script **runs the complete RAG pipeline**:
 4. Evaluates with RAGAS
 5. Logs to MLflow
 
+**⚠️ IMPORTANT: This makes API calls that cost money!**
+
 ```bash
-# Evaluate NaiveRAG on HotpotQA (100 samples)
+# Step 1: Test with dry-run first (no API calls, uses fake LLM)
+python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 10 --dry-run
+
+# Step 2: If dry-run works, run with real API (costs money!)
 python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 100
 
 # Evaluate GraphRAG on 2WikiMultiHopQA
@@ -1324,6 +1329,35 @@ Evaluation Script (scripts/run_rag_evaluation.py)
 | **Ground Truth** | HuggingFace datasets | Correct answer from dataset |
 | **Metrics** | RAGAS framework | Automated quality scoring |
 
+### Qdrant Payload Schema (Indexed Fields)
+
+Each document chunk stored in Qdrant has the following payload fields:
+
+```json
+{
+  "dataset": "HotpotQA",           // Dataset name (indexed)
+  "sample_id": "5a8b5...",         // Original sample ID (indexed)
+  "composite_id": "HotpotQA_5a8b5...", // dataset_sample_id for grouping (indexed)
+  "text": "The Eiffel Tower..."    // The actual document chunk text
+}
+```
+
+**Indexed Fields:**
+| Field | Type | Purpose |
+|-------|------|---------|
+| `dataset` | keyword | Filter by dataset (e.g., HotpotQA only) |
+| `sample_id` | keyword | Lookup specific samples |
+| `composite_id` | keyword | Group by dataset+sample combination |
+
+**Usage Example:**
+```python
+# Filter by dataset
+retriever = qdrant.get_langchain_retriever(target_dataset="HotpotQA", k=5)
+
+# In future: Group by composite_id for analysis
+# This enables per-sample analysis across chunks
+```
+
 ### 4. Example Data Flow
 
 For a single HotpotQA question:
@@ -1398,5 +1432,143 @@ python scripts/run_rag_evaluation.py --samples 100
 # Later evaluate on all 1000
 python scripts/run_rag_evaluation.py --samples 1000
 ```
+
+---
+
+## Safe Evaluation Workflow (No Unexpected API Costs)
+
+Follow this workflow to ensure you don't waste money on API calls due to bugs or misconfiguration:
+
+### Step 1: Dry-Run Test (Zero API Calls)
+
+```bash
+# ALWAYS run dry-run first to verify the flow works
+# This uses FakeLLM and skips RAGAS - zero API calls
+
+# Test NaiveRAG
+python scripts/run_rag_evaluation.py \
+  --strategy naive \
+  --dataset HotpotQA \
+  --samples 10 \
+  --dry-run
+
+# Test GraphRAG (requires Neo4j)
+python scripts/run_rag_evaluation.py \
+  --strategy graph \
+  --dataset HotpotQA \
+  --samples 10 \
+  --dry-run
+
+# Test AgenticRAG
+python scripts/run_rag_evaluation.py \
+  --strategy agentic \
+  --dataset HotpotQA \
+  --samples 10 \
+  --dry-run
+
+# Test DecompositionRAG
+python scripts/run_rag_evaluation.py \
+  --strategy decomposition \
+  --dataset HotpotQA \
+  --samples 10 \
+  --dry-run
+```
+
+**Expected output:**
+```
+[DRY RUN] Using FakeLLM (no API calls)
+[DRY RUN] Skipping RAGAS evaluation
+[DRY RUN] This is a fake answer for testing.
+...
+[DRY RUN COMPLETE] No actual API calls were made.
+```
+
+### Step 2: Run Unit Tests (Zero API Calls)
+
+```bash
+# Run all tests for the evaluation script
+pytest tests/test_run_rag_evaluation.py -v
+
+# Run all unit tests
+pytest tests/ -v -k "not integration"
+```
+
+### Step 3: Small Real Test (Minimal Cost)
+
+```bash
+# Only after dry-run and tests pass:
+# Run with 10 samples to verify real API works
+
+python scripts/run_rag_evaluation.py \
+  --strategy naive \
+  --dataset HotpotQA \
+  --samples 10 \
+  --run-name "naive_test_10samples"
+```
+
+**Cost estimate:** ~$0.01-0.05 for 10 samples
+
+### Step 4: Full Evaluation (Real Cost)
+
+```bash
+# Only after small test succeeds:
+# Run with full sample size
+
+python scripts/run_rag_evaluation.py \
+  --strategy naive \
+  --dataset HotpotQA \
+  --samples 100 \
+  --run-name "naive_full_100samples"
+```
+
+**Cost estimate:** ~$0.50-2.00 for 100 samples (depending on model)
+
+### Step 5: Compare All Strategies
+
+```bash
+# Run all 4 strategies with same parameters for fair comparison
+# Each strategy is run separately
+
+STRATEGIES=("naive" "graph" "agentic" "decomposition")
+for strategy in "${STRATEGIES[@]}"; do
+  echo "Running $strategy..."
+  python scripts/run_rag_evaluation.py \
+    --strategy "$strategy" \
+    --dataset HotpotQA \
+    --samples 100 \
+    --run-name "${strategy}_comparison" \
+    --output "results_${strategy}.csv"
+done
+
+# View all in MLflow
+mlflow ui
+```
+
+---
+
+## Quick Command Reference
+
+```bash
+# ZERO COST (Safe to run anytime)
+pytest tests/test_run_rag_evaluation.py -v                    # Run unit tests
+python scripts/run_rag_evaluation.py --dry-run ...            # Dry-run mode
+
+# MINIMAL COST (Verify before full run)
+python scripts/run_rag_evaluation.py --samples 10 ...         # 10 samples (~$0.05)
+
+# FULL COST (Only when ready)
+python scripts/run_rag_evaluation.py --samples 100 ...        # 100 samples (~$1-2)
+python scripts/run_rag_evaluation.py --samples 500 ...        # 500 samples (~$5-10)
+```
+
+### Cost Control Checklist
+
+- [ ] Run with `--dry-run` first
+- [ ] Verify zero API calls in OpenRouter dashboard
+- [ ] Run unit tests: `pytest tests/test_run_rag_evaluation.py`
+- [ ] Start with `--samples 10` for real test
+- [ ] Only then increase to full sample size
+
+---
 
 *Generated for RAGify Project - Last Updated: 2026-02-27*

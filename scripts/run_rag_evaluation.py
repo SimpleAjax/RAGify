@@ -164,7 +164,8 @@ def run_evaluation(
     api_base: str,
     max_samples: int,
     output_file: str,
-    run_name: str = None
+    run_name: str = None,
+    dry_run: bool = False
 ):
     """Run complete RAG evaluation pipeline."""
     
@@ -183,13 +184,24 @@ def run_evaluation(
         print("No samples loaded. Exiting.")
         return
     
-    # 2. Setup LLM
-    print(f"\nInitializing LLM: {model_name}")
-    llm = ChatOpenAI(
-        model_name=model_name,
-        openai_api_base=api_base,
-        openai_api_key=config.get_api_key()
-    )
+    # 2. Setup LLM (use FakeLLM for dry-run)
+    if dry_run:
+        print(f"\n[DRY RUN] Using FakeLLM (no API calls)")
+        # Use CustomFakeLLM that supports structured output
+        from tests.strategies.integration.conftest import CustomFakeLLM
+        llm = CustomFakeLLM(responses=[
+            '{"sub_queries": [{"query": "Sub-question 1?"}, {"query": "Sub-question 2?"}]}',
+            "[DRY RUN] Generated answer from fake LLM.",
+            '{"entities": ["Entity1", "Entity2"]}',
+            "[DRY RUN] Another generated answer."
+        ])
+    else:
+        print(f"\nInitializing LLM: {model_name}")
+        llm = ChatOpenAI(
+            model_name=model_name,
+            openai_api_base=api_base,
+            openai_api_key=config.get_api_key()
+        )
     
     # 3. Setup databases
     print("\nConnecting to databases...")
@@ -251,10 +263,30 @@ def run_evaluation(
     
     print(f"\nGenerated answers for {len(eval_data)} questions.")
     
-    # 6. Evaluate with RAGAS
-    print("\nEvaluating with RAGAS metrics...")
-    evaluator = RagasEvaluator(model_name=config.EVALUATION_MODEL, api_base=config.EVALUATION_API_BASE)
-    results_df = evaluator.evaluate_strategy(eval_data)
+    # 6. Evaluate with RAGAS (skip in dry-run mode to avoid API costs)
+    if dry_run:
+        print("\n[DRY RUN] Skipping RAGAS evaluation (would use evaluation model from config)")
+        print(f"[DRY RUN] Evaluation model would be: {config.EVALUATION_MODEL}")
+        # Create dummy results for dry-run
+        import pandas as pd
+        results_df = pd.DataFrame([
+            {
+                "question": item["question"],
+                "answer": item["answer"],
+                "contexts": item["contexts"],
+                "ground_truth": item["ground_truth"],
+                "context_precision": 0.5,
+                "context_recall": 0.5,
+                "faithfulness": 0.5,
+                "answer_relevancy": 0.5
+            }
+            for item in eval_data
+        ])
+    else:
+        print("\nEvaluating with RAGAS metrics...")
+        print(f"Using evaluation model: {config.EVALUATION_MODEL}")
+        evaluator = RagasEvaluator(model_name=config.EVALUATION_MODEL, api_base=config.EVALUATION_API_BASE)
+        results_df = evaluator.evaluate_strategy(eval_data)
     
     # 7. Log to MLflow
     tracker = ExperimentTracker()
@@ -281,11 +313,17 @@ def run_evaluation(
     print("\n" + "=" * 70)
     print("EVALUATION SUMMARY")
     print("=" * 70)
+    if dry_run:
+        print("[DRY RUN MODE - No API calls made]")
     averages = results_df.select_dtypes(include='number').mean()
     for metric, score in averages.items():
         print(f"  {metric}: {score:.4f}")
     print("=" * 70)
-    print(f"\nView detailed results in MLflow: mlflow ui")
+    if dry_run:
+        print("\n[DRY RUN COMPLETE] No actual API calls were made.")
+        print("To run with real API calls, remove --dry-run flag.")
+    else:
+        print(f"\nView detailed results in MLflow: mlflow ui")
     
     # Cleanup
     if neo4j:
@@ -298,6 +336,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Dry run (test flow without API calls)
+  python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 10 --dry-run
+  
   # Evaluate NaiveRAG on HotpotQA
   python scripts/run_rag_evaluation.py --strategy naive --dataset HotpotQA --samples 50
   
@@ -333,6 +374,9 @@ Examples:
     parser.add_argument("--run-name", type=str, default=None,
                         help="MLflow run name (default: <strategy>_<dataset>_<timestamp>)")
     
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Test the flow without making API calls (uses fake LLM)")
+    
     args = parser.parse_args()
     
     # Set defaults from config
@@ -358,7 +402,8 @@ Examples:
         api_base=api_base,
         max_samples=args.samples,
         output_file=output_file,
-        run_name=run_name
+        run_name=run_name,
+        dry_run=args.dry_run
     )
 
 
